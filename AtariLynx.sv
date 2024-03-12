@@ -210,6 +210,12 @@ assign AUDIO_MIX = status[8:7];
 localparam CONF_STR = {
 	"AtariLynx;SS3E000000:20000;",
 	"FS,LNXLYX;",
+	//LLAPI: OSD menu item
+	//LLAPI Always ON
+	"-,<< LLAPI enabled >>;",
+	"-,<< Use USER I/O port >>;",
+	"-;",
+	//END LLAPI	
     "-;",
 	"C,Cheats;",
 	"H1o7,Cheats Enabled,Yes,No;",
@@ -244,7 +250,7 @@ localparam CONF_STR = {
 	"P1-;",
 	//LLAPI: OSD menu item. swapped NONE with LLAPI. To detect LLAPI, status[19] = 1.
 	//LLAPI: Always double check witht the bits map allocation table to avoid conflicts	
-	"OJ,Serial Mode,Off,LLAPI;",
+	//"OJ,Serial Mode,Off,LLAPI;",
 	//LLAPI
 	"P1-;",
 	"P1O78,Stereo mix,none,25%,50%,100%;",
@@ -925,7 +931,7 @@ wire [71:0] llapi_analog, llapi_analog2;
 wire [7:0]  llapi_type, llapi_type2;
 wire llapi_en, llapi_en2;
 
-wire llapi_select = status[19];
+wire llapi_select = 1'b1;
 
 wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
 
@@ -1041,8 +1047,7 @@ always_comb begin
 	end
 end
 
-//Assign (DOWN + FIRST BUTTON) Combinaison to bring the OSD up - P1 and P1 ports.
-//TODO : Support long press detection
+//Assign (DOWN + START + FIRST BUTTON) Combinaison to bring the OSD up - P1 and P2 ports.
 
 wire llapi_osd = (llapi_buttons[26] && llapi_buttons[5] && llapi_buttons[0]) || (llapi_buttons2[26] && llapi_buttons2[5] && llapi_buttons2[0]);
 
