@@ -209,13 +209,12 @@ assign AUDIO_MIX = status[8:7];
 `include "build_id.v" 
 localparam CONF_STR = {
 	"AtariLynx;SS3E000000:20000;",
-	"FS,LNXLYX;",
-	//LLAPI: OSD menu item
 	//LLAPI Always ON
-	"-,<< LLAPI enabled >>;",
-	"-,<< Use USER I/O port >>;",
+	"-,>> LLAPI enabled core    <<;",
+	"-,>> Connect USER I/O port <<;",		
 	"-;",
-	//END LLAPI	
+	//END LLAPI
+	"FS,LNXLYX;",
     "-;",
 	"C,Cheats;",
 	"H1o7,Cheats Enabled,Yes,No;",
@@ -248,10 +247,6 @@ localparam CONF_STR = {
 	"P1OUV,Flickerblend,Off,2 Frames,3 Frames;",
 	"P1OC,FPS Overlay,Off,On;",
 	"P1-;",
-	//LLAPI: OSD menu item. swapped NONE with LLAPI. To detect LLAPI, status[19] = 1.
-	//LLAPI: Always double check witht the bits map allocation table to avoid conflicts	
-	//"OJ,Serial Mode,Off,LLAPI;",
-	//LLAPI
 	"P1-;",
 	"P1O78,Stereo mix,none,25%,50%,100%;",
 	"P1OP,FastForward Sound,On,Off;",
@@ -924,18 +919,20 @@ savestate_ui savestate_ui
 defparam savestate_ui.INFO_TIMEOUT_BITS = 27;
 
 
-////////////////////////////  LLAPI  ///////////////////////////////////
+//////////////////   LLAPI   ///////////////////
 
 wire [31:0] llapi_buttons, llapi_buttons2;
 wire [71:0] llapi_analog, llapi_analog2;
 wire [7:0]  llapi_type, llapi_type2;
 wire llapi_en, llapi_en2;
-
-wire llapi_select = 1'b1;
-
 wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
+wire [15:0] joy_ll_a;
+wire [15:0] joy_ll_b;
 
-// Indexes:
+//Assign (DOWN + START + FIRST BUTTON) Combinaison to bring the OSD up - P1 and P2 ports.
+wire llapi_osd = (llapi_buttons[26] & llapi_buttons[5] & llapi_buttons[0]) || (llapi_buttons2[26] & llapi_buttons2[5] & llapi_buttons2[0]);
+
+// LLAPI Indexes:
 // 0 = D+    = P1 Latch
 // 1 = D-    = P1 Data
 // 2 = TX-   = LLAPI Enable
@@ -943,29 +940,24 @@ wire llapi_latch_o, llapi_latch_o2, llapi_data_o, llapi_data_o2;
 // 4 = RX+   = P2 Latch
 // 5 = RX-   = P2 Data
 
-//Connection to USER_OUT port
 always_comb begin
-	USER_OUT = 6'b111111;
-	if (llapi_select) begin
 		USER_OUT[0] = llapi_latch_o;
 		USER_OUT[1] = llapi_data_o;
-		USER_OUT[2] = ~(llapi_select & ~OSD_STATUS);//LED on Blister
+		USER_OUT[2] = OSD_STATUS; // Blister LED
 		USER_OUT[4] = llapi_latch_o2;
 		USER_OUT[5] = llapi_data_o2;
-	end
 end
 
 //Port 1 conf
-
 LLAPI llapi
 (
 	.CLK_50M(CLK_50M),
-	.LLAPI_SYNC(vbl),
+	.LLAPI_SYNC(vblank),
 	.IO_LATCH_IN(USER_IN[0]),
 	.IO_LATCH_OUT(llapi_latch_o),
 	.IO_DATA_IN(USER_IN[1]),
 	.IO_DATA_OUT(llapi_data_o),
-	.ENABLE(llapi_select & ~OSD_STATUS),
+	.ENABLE(~OSD_STATUS),
 	.LLAPI_BUTTONS(llapi_buttons),
 	.LLAPI_ANALOG(llapi_analog),
 	.LLAPI_TYPE(llapi_type),
@@ -973,31 +965,35 @@ LLAPI llapi
 );
 
 //Port 2 conf
-
 LLAPI llapi2
 (
 	.CLK_50M(CLK_50M),
-	.LLAPI_SYNC(vbl),
+	.LLAPI_SYNC(vblank),
 	.IO_LATCH_IN(USER_IN[4]),
 	.IO_LATCH_OUT(llapi_latch_o2),
 	.IO_DATA_IN(USER_IN[5]),
 	.IO_DATA_OUT(llapi_data_o2),
-	.ENABLE(llapi_select & ~OSD_STATUS),
+	.ENABLE(~OSD_STATUS),
 	.LLAPI_BUTTONS(llapi_buttons2),
 	.LLAPI_ANALOG(llapi_analog2),
 	.LLAPI_TYPE(llapi_type2),
 	.LLAPI_EN(llapi_en2)
 );
 
+// controller id is 0 if there is either an Atari controller or no controller
+// if id is 0, assume there is no controller
+// also check for 255 ('Searching mode') and treat that as 'no controller' as well
+wire use_llapi  = llapi_en && ((|llapi_type  && ~(&llapi_type))); //  || llapi_button_pressed);
+wire use_llapi2 = llapi_en2 && ((|llapi_type2 && ~(&llapi_type2))); // || llapi_button_pressed2);
+
+
 //Controller string provided by core for reference (order is important)
 //Controller specific mapping based on type. More info here : https://docs.google.com/document/d/12XpxrmKYx_jgfEPyw-O2zex1kTQZZ-NSBdLO2RQPRzM/edit
 //llapi_Buttons id are HID id - 1
 
-//Port 1 mapping
-
 // "J1,A,B,L,R,Select,Start,Turbo;",
 
-wire [15:0] joy_ll_a;
+//Port 1 mapping
 always_comb begin
 	// map for saturn controller
 	// use L and R instead of top face buttons
@@ -1022,8 +1018,6 @@ always_comb begin
 end
 
 //Port 2 mapping
-
-wire [15:0] joy_ll_b;
 always_comb begin
 	// map for saturn controller
 	// use L and R instead of top face buttons
@@ -1046,12 +1040,6 @@ always_comb begin
 		};
 	end
 end
-
-//Assign (DOWN + START + FIRST BUTTON) Combinaison to bring the OSD up - P1 and P2 ports.
-
-wire llapi_osd = (llapi_buttons[26] && llapi_buttons[5] && llapi_buttons[0]) || (llapi_buttons2[26] && llapi_buttons2[5] && llapi_buttons2[0]);
-
-///////////////////////////  END LLAPI  ////////////////////////////////
 
 ////////////////////////////  CODES  ///////////////////////////////////
 
